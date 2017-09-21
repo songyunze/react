@@ -1,6 +1,6 @@
-#分析react项目的package.json
+# 分析react项目的package.json
 主要分析react项目中的package.json的脚本，涉及到编译验证发布提交。
-##编译--yarn build
+## 编译--yarn build
 执行了`npm run version-check && node scripts/rollup/build.js`命令
 `npm run version-check` 执行的是 `node ./scripts/tasks/version-check.js`
 打开version-check.js文件，作用是检查各个包下的版本号是否和react的版本号一致，不一致提示并退出
@@ -598,6 +598,7 @@ rimraf('build', () => {
   // rather than run concurently, opt to run them serially
   // this helps improve console/warning/error output
   // and fixes a bunch of IO failures that sometimes occured
+  //同步执行聚合任务
   return runWaterfall(tasks)
     .then(() => {
       // output the results
