@@ -1,3 +1,42 @@
+#分析react项目的package.json
+主要分析react项目中的package.json的脚本，涉及到编译验证发布提交。
+##编译--yarn build
+执行了`npm run version-check && node scripts/rollup/build.js`命令
+`npm run version-check` 执行的是 `node ./scripts/tasks/version-check.js`
+打开version-check.js文件，作用是检查各个包下的版本号是否和react的版本号一致，不一致提示并退出
+```
+'use strict';
+const reactVersion = require('../../package.json').version;
+const versions = {
+  'packages/react/package.json': require('../../packages/react/package.json')
+    .version,
+  'packages/react-dom/package.json': require('../../packages/react-dom/package.json')
+    .version,
+  'packages/react-test-renderer/package.json': require('../../packages/react-test-renderer/package.json')
+    .version,
+  'src/ReactVersion.js': require('../../src/ReactVersion'),
+};
+
+let allVersionsMatch = true;
+Object.keys(versions).forEach(function(name) {
+  const version = versions[name];
+  if (version !== reactVersion) {
+    allVersionsMatch = false;
+    console.log(
+      '%s version does not match package.json. Expected %s, saw %s.',
+      name,
+      reactVersion,
+      version
+    );
+  }
+});
+
+if (!allVersionsMatch) {
+  process.exit(1);
+}
+```
+检查版本号成功以后，执行 node scripts/rollup/build.js 命令
+```
 'use strict';
 
 const rollup = require('rollup').rollup;
@@ -408,7 +447,35 @@ function getPlugins(
 
   return plugins;
 }
+/** react的bunddle
+ {
+    babelOpts: babelOptsReact,
+    bundleTypes: [UMD_DEV, UMD_PROD, NODE_DEV, NODE_PROD, FB_DEV, FB_PROD],
+    config: {
+      destDir: 'build/',
+      moduleName: 'React',
+      sourceMap: false,
+    },
+    entry: 'src/isomorphic/ReactEntry',
+    externals: [
+      'create-react-class/factory',
+      'prop-types',
+      'prop-types/checkPropTypes',
+    ],
+    fbEntry: 'src/isomorphic/ReactEntry',
+    hasteName: 'React',
+    isRenderer: false,
+    label: 'core',
+    manglePropertiesOnProd: false,
+    name: 'react',
+    paths: [
+      'src/isomorphic/**/*.js',
 
+      'src/ReactVersion.js',
+      'src/shared/**/*.js',
+    ],
+  },
+*/
 function createBundle(bundle, bundleType) {
   const shouldSkipBundleType = bundle.bundleTypes.indexOf(bundleType) === -1;
   if (shouldSkipBundleType) {
@@ -438,7 +505,7 @@ function createBundle(bundle, bundleType) {
   const packageName = Packaging.getPackageName(bundle.name);
 
   console.log(`${chalk.bgYellow.black(' BUILDING ')} ${logKey}`);
-  const rollupConf = {
+  return rollup({
     entry: bundleType === FB_DEV || bundleType === FB_PROD
       ? bundle.fbEntry
       : bundle.entry,
@@ -460,8 +527,7 @@ function createBundle(bundle, bundleType) {
       bundle.useFiber,
       bundle.modulesToStub
     ),
-  };
-  return rollup(rollupConf)
+  })
     .then(result =>
       result.write(
         updateBundleConfig(
@@ -490,7 +556,7 @@ function createBundle(bundle, bundleType) {
     });
 }
 
-// clear the build directory
+// 清空build文件夹后重新编译
 rimraf('build', () => {
   // create a new build directory
   fs.mkdirSync('build');
@@ -498,11 +564,18 @@ rimraf('build', () => {
   fs.mkdirSync(join('build', 'packages'));
   // create the dist folder for UMD bundles
   fs.mkdirSync(join('build', 'dist'));
-
+  //写了两个任务。createFacebookWWWBuild，createReactNativeBuild
+  //将src/renderers/dom/shared/eventPlugins/TapEventPlugin.js
+  //'src/renderers/shared/stack/PooledClass.js',
+  //'src/renderers/shared/fiber/isomorphic/ReactTypes.js',
+  //'src/renderers/native/ReactNativeTypes.js',
+  //复制到build文件夹下
   const tasks = [
     Packaging.createFacebookWWWBuild,
     Packaging.createReactNativeBuild,
   ];
+  //这里面定义了一堆任务。使用rollup聚合代码
+  //
   for (const bundle of Bundles.bundles) {
     tasks.push(
       () => createBundle(bundle, UMD_DEV),
@@ -563,3 +636,5 @@ function runWaterfall(promiseFactories) {
     return runWaterfall(tail);
   });
 }
+
+```
